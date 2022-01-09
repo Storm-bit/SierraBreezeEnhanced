@@ -128,7 +128,7 @@ namespace Breeze
         void reconfigure();
         void recalculateBorders();
         void updateButtonsGeometry();
-        void updateButtonsGeometryDelayed();
+        void updateButtonsGeometryDelayed() const;
         void updateTitleBar();
         void updateAnimationState();
         void updateSizeGripVisibility();
@@ -141,6 +141,8 @@ namespace Breeze
 
         void createButtons();
         void paintTitleBar(QPainter *painter, const QRect &repaintRegion);
+        void readKonsoleProfileColor();
+        bool isKonsoleWindow(KDecoration2::DecoratedClient *dc) const;
         void updateShadow();
         void updateActiveShadow();
         void updateInactiveShadow();
@@ -173,6 +175,11 @@ namespace Breeze
 
         //* active state change opacity
         qreal m_opacity = 0;
+
+        QColor m_KonsoleTitleBarColor;
+        QColor m_KonsoleTitleBarTextColorActive;
+        QColor m_KonsoleTitleBarTextColorInactive;
+        bool m_KonsoleTitleBarColorValid;
     };
 
     bool Decoration::hasBorders() const

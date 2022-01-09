@@ -45,19 +45,23 @@
 #include <QPainter>
 #include <QTextStream>
 #include <QTimer>
+#include <QPropertyAnimation>
 
 #if BREEZE_HAVE_X11
 #include <QX11Info>
 #endif
 
 #include <cmath>
+#include <QAbstractAnimation>
+#include <QDir>
+#include <KWindowInfo>
 
 K_PLUGIN_FACTORY_WITH_JSON(
     BreezeDecoFactory,
     "breeze.json",
     registerPlugin<Breeze::Decoration>();
     registerPlugin<Breeze::Button>();
-    registerPlugin<Breeze::ConfigWidget>(QStringLiteral("kcmodule"));
+    registerPlugin<Breeze::ConfigWidget>();
 )
 
 namespace
@@ -213,94 +217,35 @@ namespace Breeze
     //________________________________________________________________
     QColor Decoration::titleBarColor() const
     {
-        QColor titleBarColor( this->rawTitleBarColor() );
-        QColor outlineColor( this->outlineColor() );
+        auto c = client().toStrongRef().data();
 
-        auto c( client().toStrongRef().data() );
-        if ( drawBackgroundGradient() ) // && c->isActive() )
-        {
-            if ( c->isActive() )
-            {
-                if ( qGray(titleBarColor.rgb()) > 69 ) {
-                    if ( outlineColor.isValid() )
-                        titleBarColor = titleBarColor.darker(115);
-                }
-                else {
-                    if ( outlineColor.isValid() )
-                        titleBarColor = titleBarColor.lighter(115);
-                }
-            }
-            else
-            {
-                if ( qGray(titleBarColor.rgb()) > 69 ) {
-                    if ( outlineColor.isValid() )
-                        titleBarColor = titleBarColor.darker(110);
-                }
-                else {
-                    if ( outlineColor.isValid() )
-                        titleBarColor = titleBarColor.lighter(110);
-                }
-            }
+        if (isKonsoleWindow(c)) {
+            return m_KonsoleTitleBarColor;
         }
-        else if ( outlineColor.isValid() && c->isActive() )
-        {
-            if ( qGray(titleBarColor.rgb()) > 69 )
-                titleBarColor = titleBarColor.darker(115);
-            else
-                titleBarColor = titleBarColor.lighter(115);
-        }
-        else if ( outlineColor.isValid() )
-        {
-            if ( qGray(titleBarColor.rgb()) > 69 )
-                titleBarColor = titleBarColor.darker(110);
-            else
-                titleBarColor = titleBarColor.lighter(110);
-        }
-        return titleBarColor;
+
+        if (hideTitleBar()) return c->color(ColorGroup::Inactive, ColorRole::TitleBar);
+        else if (m_animation->state() == QPropertyAnimation::Running) {
+            return KColorUtils::mix(
+                    c->color( ColorGroup::Inactive, ColorRole::TitleBar ),
+                    c->color( ColorGroup::Active, ColorRole::TitleBar ),
+                    m_opacity );
+        } else return c->color( c->isActive() ? ColorGroup::Active : ColorGroup::Inactive, ColorRole::TitleBar );
     }
 
     //________________________________________________________________
     QColor Decoration::outlineColor() const
     {
-        if( !m_internalSettings->drawTitleBarSeparator() ) return QColor();
-
-        QColor titleBarColor ( rawTitleBarColor() );
-
-        uint r = qRed(titleBarColor.rgb());
-        uint g = qGreen(titleBarColor.rgb());
-        uint b = qBlue(titleBarColor.rgb());
-
-        qreal colorConditional = 0.299 * static_cast<qreal>(r) + 0.587 * static_cast<qreal>(g) + 0.114 * static_cast<qreal>(b);
-
-        QColor outlineColor;
-        if ( colorConditional > 69 ) // 255 -186
-          outlineColor = titleBarColor.darker(140);
-        else
-          outlineColor = titleBarColor.lighter(140);
-
-        return outlineColor;
-    }
-
-    //________________________________________________________________
-    QColor Decoration::rawTitleBarColor() const
-    {
-        auto c = client().toStrongRef().data();
-        QColor titleBarColor;
-
-        if ( !matchColorForTitleBar() ) {
-            if( m_animation->state() == QAbstractAnimation::Running )
-            {
-                titleBarColor = KColorUtils::mix(
-                    c->color( ColorGroup::Inactive, ColorRole::TitleBar ),
-                    c->color( ColorGroup::Active, ColorRole::TitleBar ),
-                    m_opacity );
-            } else titleBarColor = c->color( c->isActive() ? ColorGroup::Active : ColorGroup::Inactive, ColorRole::TitleBar );
+        auto c = client().toStrongRef().data() ;
+        if (!m_internalSettings->drawTitleBarSeparator()) return {};
+        if (m_animation->state() == QPropertyAnimation::Running) {
+            QColor color( c->palette().color( QPalette::Highlight ) );
+            color.setAlpha( color.alpha()*m_opacity );
+            return color;
+        } else if (c->isActive()) {
+            return c->palette().color(QPalette::Highlight);
+        } else {
+            return {};
         }
-        else {
-          titleBarColor = c->palette().color(QPalette::Window);
-        }
-        titleBarColor.setAlpha(titleBarAlpha());
-        return titleBarColor;
     }
 
     //________________________________________________________________
@@ -308,24 +253,27 @@ namespace Breeze
     {
         auto c = client().toStrongRef().data();
 
-        QColor darkTextColor( !c->isActive() && matchColorForTitleBar() ? QColor(81, 102, 107) : QColor(34, 45, 50) );
-        QColor lightTextColor( !c->isActive() && matchColorForTitleBar() ? QColor(192, 193, 194) : QColor(250, 251, 252) );
-
-        QColor titleBarColor = this->titleBarColor();
-
-        uint r = qRed(titleBarColor.rgb());
-        uint g = qGreen(titleBarColor.rgb());
-        uint b = qBlue(titleBarColor.rgb());
-
-        // modified from https://stackoverflow.com/questions/3942878/how-to-decide-font-color-in-white-or-black-depending-on-background-color
-        // qreal titleBarLuminance = (0.2126 * static_cast<qreal>(r) + 0.7152 * static_cast<qreal>(g) + 0.0722 * static_cast<qreal>(b)) / 255.;
-        // if ( titleBarLuminance >  sqrt(1.05 * 0.05) - 0.05 )
-        qreal colorConditional = 0.299 * static_cast<qreal>(r) + 0.587 * static_cast<qreal>(g) + 0.114 * static_cast<qreal>(b);
-        if ( colorConditional > 186 || g > 186 ) // ( colorConditional > 186 ) // if ( colorConditional > 150 )
-            return darkTextColor;
-        else
-            return lightTextColor;
-
+        if( m_animation->state() == QPropertyAnimation::Running )
+        {
+            if ( isKonsoleWindow(c) ) {
+                return KColorUtils::mix(
+                        m_KonsoleTitleBarTextColorInactive,
+                        m_KonsoleTitleBarTextColorActive,
+                        m_opacity );
+            }
+            else {
+                return KColorUtils::mix(
+                        c->color( ColorGroup::Inactive, ColorRole::Foreground ),
+                        c->color( ColorGroup::Active, ColorRole::Foreground ),
+                        m_opacity );
+            }
+        } else {
+            if ( isKonsoleWindow(c) ) {
+                return  c->isActive() ? m_KonsoleTitleBarTextColorActive : m_KonsoleTitleBarTextColorInactive;
+            } else {
+                return  c->color( c->isActive() ? ColorGroup::Active : ColorGroup::Inactive, ColorRole::Foreground );
+            }
+        }
     }
 
     //________________________________________________________________
@@ -664,6 +612,9 @@ namespace Breeze
         // shadow
         createShadow();
 
+        // konsole title bar color and transparency
+        readKonsoleProfileColor();
+
         // size grip
         if( borderSize() <= 1 && m_internalSettings->drawSizeGrip() ) createSizeGrip();
         else deleteSizeGrip();
@@ -721,8 +672,71 @@ namespace Breeze
         updateButtonsGeometry();
     }
 
+    void Decoration::readKonsoleProfileColor() {
+        m_KonsoleTitleBarColorValid = false;
+
+        const KConfig konsoleConfig("konsolerc");
+        const QString defaultProfileFile = konsoleConfig.group("Desktop Entry").readEntry("DefaultProfile", QString());
+
+        // Konsole config profile path
+        const QString configLocation(QDir::homePath() + "/.local/share/konsole/");
+        const QString shellProfileLocation(configLocation + defaultProfileFile);
+
+        if (!QFile::exists(shellProfileLocation)) {
+            return;
+        }
+
+        const KConfig configProfile(shellProfileLocation, KConfig::NoGlobals);
+
+        const QString colorFileLocation = configLocation + configProfile.group("Appearance").readEntry("ColorScheme", QString()) + ".colorscheme";
+
+        if (!QFile::exists(colorFileLocation)) {
+            return;
+        }
+
+        const KConfig configColor(colorFileLocation, KConfig::NoGlobals);
+        const QStringList backgroundRGB = configColor.group("Background").readEntry("Color").split(',');
+
+        if (backgroundRGB.size() != 3) {
+            return;
+        }
+
+        m_KonsoleTitleBarColor.setRed(backgroundRGB[0].toInt());
+        m_KonsoleTitleBarColor.setGreen(backgroundRGB[1].toInt());
+        m_KonsoleTitleBarColor.setBlue(backgroundRGB[2].toInt());
+        m_KonsoleTitleBarColor.setAlpha(configColor.group("General").readEntry("Opacity").toFloat() * 255);
+
+        // Text color
+        const QStringList foregroundRGB = configColor.group("Foreground").readEntry("Color").split(',');
+
+        if (foregroundRGB.size() != 3) {
+            return;
+        }
+
+        m_KonsoleTitleBarTextColorActive.setRed(foregroundRGB[0].toInt());
+        m_KonsoleTitleBarTextColorActive.setGreen(foregroundRGB[1].toInt());
+        m_KonsoleTitleBarTextColorActive.setBlue(foregroundRGB[2].toInt());
+
+        m_KonsoleTitleBarTextColorInactive = m_KonsoleTitleBarTextColorActive;
+        m_KonsoleTitleBarTextColorInactive.setAlphaF(0.5);
+
+        m_KonsoleTitleBarColorValid = true;
+    }
+
+    bool Decoration::isKonsoleWindow(KDecoration2::DecoratedClient *dc) const {
+        if (!m_KonsoleTitleBarColorValid) {
+            return false;
+        }
+
+        KWindowInfo info(dc->windowId(), NET::Properties(), NET::WM2WindowClass | NET::WM2WindowRole);
+
+        return info.valid() &&
+               info.windowClassClass() == QByteArray("konsole") &&
+               info.windowRole().startsWith("MainWindow");
+    }
+
     //________________________________________________________________
-    void Decoration::updateButtonsGeometryDelayed()
+    void Decoration::updateButtonsGeometryDelayed() const
     { QTimer::singleShot( 0, this, &Decoration::updateButtonsGeometry ); }
 
     //________________________________________________________________
@@ -737,8 +751,8 @@ namespace Breeze
         foreach( const QPointer<KDecoration2::DecorationButton>& button, m_leftButtons->buttons() + m_rightButtons->buttons() )
         {
             button.data()->setGeometry( QRectF( QPoint( 0, 0 ), QSizeF( bWidth, bHeight ) ) );
-            static_cast<Button*>( button.data() )->setOffset( QPointF( 0, verticalOffset ) );
-            static_cast<Button*>( button.data() )->setIconSize( QSize( bWidth, bWidth ) );
+            dynamic_cast<Button*>( button.data() )->setOffset( QPointF( 0, verticalOffset ) );
+            dynamic_cast<Button*>( button.data() )->setIconSize( QSize( bWidth, bWidth ) );
         }
 
         // left buttons
@@ -755,7 +769,7 @@ namespace Breeze
             if( isLeftEdge() )
             {
                 // add offsets on the side buttons, to preserve padding, but satisfy Fitts law
-                auto button = static_cast<Button*>( m_leftButtons->buttons().front().data() );
+                auto button = dynamic_cast<Button*>( m_leftButtons->buttons().front().data() );
                 button->setGeometry( QRectF( QPoint( 0, 0 ), QSizeF( bWidth + hPadding, bHeight ) ) );
                 button->setFlag( Button::FlagFirstInList );
                 button->setHorizontalOffset( hPadding );
@@ -780,7 +794,7 @@ namespace Breeze
             if( isRightEdge() )
             {
 
-                auto button = static_cast<Button*>( m_rightButtons->buttons().back().data() );
+                auto button = dynamic_cast<Button*>( m_rightButtons->buttons().back().data() );
                 button->setGeometry( QRectF( QPoint( 0, 0 ), QSizeF( bWidth + hPadding, bHeight ) ) );
                 button->setFlag( Button::FlagLastInList );
 
@@ -826,18 +840,17 @@ namespace Breeze
 
         paintTitleBar(painter, repaintRegion);
 
-        if ( hasBorders() )
-        {
+        if (hasBorders()) {
             painter->save();
             // painter->setRenderHint(QPainter::Antialiasing, false);
-            painter->setBrush( Qt::NoBrush );
+            painter->setBrush(Qt::NoBrush);
 
-            QPen border_pen1( titleBarColor.darker( 125 ) );
+            QPen border_pen1(titleBarColor.darker( 125 ));
             painter->setPen(border_pen1);
-            if( s->isAlphaChannelSupported() )
+            if (s->isAlphaChannelSupported())
               painter->drawRoundedRect(rect(), m_internalSettings->cornerRadius(), m_internalSettings->cornerRadius());
             else
-              painter->drawRect( rect() );
+              painter->drawRect(rect());
 
             painter->restore();
         }
@@ -847,72 +860,85 @@ namespace Breeze
     //________________________________________________________________
     void Decoration::paintTitleBar(QPainter *painter, const QRect &repaintRegion)
     {
+        const auto c = client().toStrongRef().data();
+        // TODO Review this. Here the window color is appended in matchedTitleBarColor var
+        const QColor matchedTitleBarColor(c->palette().color(QPalette::Window));
         const QRect titleRect(QPoint(0, 0), QSize(size().width(), borderTop()));
-        if ( !titleRect.intersects(repaintRegion) ) return;
 
-        auto c = client().toStrongRef().data();
-        QColor outlineColor( this->outlineColor() );
-        QColor titleBarColor = this->titleBarColor();
+        if ( !titleRect.intersects(repaintRegion) ) return;
 
         painter->save();
         painter->setPen(Qt::NoPen);
 
         // render a linear gradient on title area
-        if ( drawBackgroundGradient() )
+        if ( c->isActive() && m_internalSettings->drawBackgroundGradient() && !isKonsoleWindow(c) )
         {
+            // TODO Review this. Initialize titleBarColor based on user's choise.
+            const QColor titleBarColor = (matchColorForTitleBar()  ? matchedTitleBarColor : this->titleBarColor() );
             QLinearGradient gradient( 0, 0, 0, titleRect.height() );
-            int b = m_internalSettings->gradientOverride() > -1 ? m_internalSettings->gradientOverride() : m_internalSettings->backgroundGradientIntensity();
-            if ( !c->isActive() )
-                 b *= 0.5;
-            b =  qBound(0, b, 100);
-            gradient.setColorAt(0.0, titleBarColor.lighter( 100 + b));
-            gradient.setColorAt(1.0, titleBarColor);
+            gradient.setColorAt(0.0, titleBarColor.lighter( 120 ) );
+            gradient.setColorAt(0.8, titleBarColor);
             painter->setBrush(gradient);
-        }
-        else
+
+        } else if ( !isKonsoleWindow(c) ) {
+            // TODO Review this. Initialize titleBarColor based on user's choise.
+            // I needed another else if because the window might not be active or has drawBackgroundGradient but
+            // I still need to take care the konsole case.
+            const QColor titleBarColor = (matchColorForTitleBar() ? matchedTitleBarColor : this->titleBarColor());
+            painter->setBrush(titleBarColor);
+
+        } else {
+            QColor titleBarColor = this->titleBarColor();
             painter->setBrush( titleBarColor );
+        }
 
         auto s = settings();
-        if( !s->isAlphaChannelSupported() )
+        if( isMaximized() || !s->isAlphaChannelSupported() )
+        {
+
             painter->drawRect(titleRect);
-        else if ( !hasBorders() ) {
+
+        } else if( c->isShaded() ) {
+
+            painter->drawRoundedRect(titleRect, Metrics::Frame_FrameRadius, Metrics::Frame_FrameRadius);
+
+        } else {
+
             painter->setClipRect(titleRect, Qt::IntersectClip);
+
             // the rect is made a little bit larger to be able to clip away the rounded corners at the bottom and sides
             painter->drawRoundedRect(titleRect.adjusted(
-                isLeftEdge() ? -m_internalSettings->cornerRadius():0,
-                isTopEdge() ? -m_internalSettings->cornerRadius():0,
-                isRightEdge() ? m_internalSettings->cornerRadius():0,
-                m_internalSettings->cornerRadius()),
-                m_internalSettings->cornerRadius(), m_internalSettings->cornerRadius());
-        }
-        else
-            painter->drawRoundedRect(titleRect, m_internalSettings->cornerRadius(), m_internalSettings->cornerRadius());
+                    isLeftEdge() ? -Metrics::Frame_FrameRadius:0,
+                    isTopEdge() ? -Metrics::Frame_FrameRadius:0,
+                    isRightEdge() ? Metrics::Frame_FrameRadius:0,
+                    Metrics::Frame_FrameRadius),
+                                     Metrics::Frame_FrameRadius, Metrics::Frame_FrameRadius);
 
-        if( !c->isShaded() && !hideTitleBar() && outlineColor.isValid() )
+        }
+
+        const QColor outlineColor( this->outlineColor() );
+        if( !c->isShaded() && outlineColor.isValid() )
         {
             // outline
             painter->setRenderHint( QPainter::Antialiasing, false );
             painter->setBrush( Qt::NoBrush );
-            QPen pen(outlineColor);
-            pen.setWidth( 1 );
-            painter->setPen( pen );
-            painter->drawLine( titleRect.bottomLeft() + QPoint(borderSize(), 0), titleRect.bottomRight() - QPoint(borderSize(), 0) );
+            painter->setPen( outlineColor );
+            painter->drawLine( titleRect.bottomLeft(), titleRect.bottomRight() );
         }
 
         painter->restore();
 
-        if( !hideTitleBar() ) {
-          // draw caption
-          painter->setFont(s->font());
-          painter->setPen( fontColor() );
-          const auto cR = captionRect();
-          const QString caption = painter->fontMetrics().elidedText(c->caption(), Qt::ElideMiddle, cR.first.width());
-          painter->drawText(cR.first, cR.second | Qt::TextSingleLine, caption);
+        // draw caption
+        painter->setFont(s->font());
+        painter->setPen( fontColor() );
 
-          // draw all buttons
-          m_leftButtons->paint(painter, repaintRegion);
-          m_rightButtons->paint(painter, repaintRegion);
-        }
+        const auto cR = captionRect();
+        const QString caption = painter->fontMetrics().elidedText(c->caption(), Qt::ElideMiddle, cR.first.width());
+        painter->drawText(cR.first, cR.second | Qt::TextSingleLine, caption);
+
+        // draw all buttons
+        m_leftButtons->paint(painter, repaintRegion);
+        m_rightButtons->paint(painter, repaintRegion);
     }
 
     //________________________________________________________________
