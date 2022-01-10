@@ -55,6 +55,7 @@
 #include <QAbstractAnimation>
 #include <QDir>
 #include <KWindowInfo>
+#include <QPainterPath>
 
 K_PLUGIN_FACTORY_WITH_JSON(
     BreezeDecoFactory,
@@ -205,13 +206,13 @@ namespace Breeze
     }
 
     //________________________________________________________________
-    void Decoration::setOpacity( qreal value )
+    void Decoration::setOpacity(qreal value)
     {
-        if( m_opacity == value ) return;
+        if (m_opacity == value) return;
         m_opacity = value;
         update();
 
-        if( m_sizeGrip ) m_sizeGrip->update();
+        if (m_sizeGrip) m_sizeGrip->update();
     }
 
     //________________________________________________________________
@@ -219,17 +220,16 @@ namespace Breeze
     {
         auto c = client().toStrongRef().data();
 
-        if (isKonsoleWindow(c)) {
-            return m_KonsoleTitleBarColor;
-        }
-
+        if (isKonsoleWindow(c)) return m_KonsoleTitleBarColor;
         if (hideTitleBar()) return c->color(ColorGroup::Inactive, ColorRole::TitleBar);
+
         else if (m_animation->state() == QPropertyAnimation::Running) {
             return KColorUtils::mix(
-                    c->color( ColorGroup::Inactive, ColorRole::TitleBar ),
-                    c->color( ColorGroup::Active, ColorRole::TitleBar ),
-                    m_opacity );
-        } else return c->color( c->isActive() ? ColorGroup::Active : ColorGroup::Inactive, ColorRole::TitleBar );
+                    c->color(ColorGroup::Inactive, ColorRole::TitleBar),
+                    c->color(ColorGroup::Active, ColorRole::TitleBar),
+                    titleBarAlpha()
+                    );
+        } else return c->color(c->isActive() ? ColorGroup::Active : ColorGroup::Inactive, ColorRole::TitleBar);
     }
 
     //________________________________________________________________
@@ -364,7 +364,7 @@ namespace Breeze
         auto s = settings();
         auto c = client().toStrongRef().data();
         const bool maximized = isMaximized();
-        const int width =  maximized ? c->width() : c->width() - 2*s->largeSpacing()*Metrics::TitleBar_SideMargin;
+        const int width  = maximized ? c->width() : c->width() - 2*s->largeSpacing()*Metrics::TitleBar_SideMargin;
         const int height = maximized ? borderTop() : borderTop() - s->smallSpacing()*Metrics::TitleBar_TopMargin;
         const int x = maximized ? 0 : s->largeSpacing()*Metrics::TitleBar_SideMargin;
         const int y = maximized ? 0 : s->smallSpacing()*Metrics::TitleBar_TopMargin;
@@ -374,17 +374,12 @@ namespace Breeze
     //________________________________________________________________
     void Decoration::updateAnimationState()
     {
-        if( m_internalSettings->animationsEnabled() )
-        {
-
+        if (m_internalSettings->animationsEnabled()) {
             auto c = client().toStrongRef().data();
-            m_animation->setDirection( c->isActive() ? QAbstractAnimation::Forward : QAbstractAnimation::Backward );
+            m_animation->setDirection(c->isActive() ? QAbstractAnimation::Forward : QAbstractAnimation::Backward);
             if( m_animation->state() != QAbstractAnimation::Running ) m_animation->start();
-
         } else {
-
             update();
-
         }
     }
 
@@ -503,8 +498,7 @@ namespace Breeze
         shadowRenderer.setDevicePixelRatio(1.0); // TODO: Create HiDPI shadows?
 
         const qreal strength = static_cast<qreal>(g_shadowStrengthInactiveWindows) / 255.0;
-        shadowRenderer.addShadow(params.shadow1.offset, params.shadow1.radius,
-            withOpacity(g_shadowColorInactiveWindows, params.shadow1.opacity * strength));
+        shadowRenderer.addShadow(params.shadow1.offset,params.shadow1.radius,withOpacity(g_shadowColorInactiveWindows, params.shadow1.opacity * strength));
         shadowRenderer.addShadow(params.shadow2.offset, params.shadow2.radius,
             withOpacity(g_shadowColorInactiveWindows, params.shadow2.opacity * strength));
 
@@ -557,8 +551,9 @@ namespace Breeze
     void Decoration::updateSizeGripVisibility()
     {
         auto c = client().toStrongRef().data();
-        if( m_sizeGrip )
-        { m_sizeGrip->setVisible( c->isResizeable() && !isMaximized() && !c->isShaded() ); }
+        if (m_sizeGrip) {
+            m_sizeGrip->setVisible(c->isResizeable() && !isMaximized() && !c->isShaded());
+        }
     }
 
     //________________________________________________________________
@@ -600,7 +595,6 @@ namespace Breeze
     //________________________________________________________________
     void Decoration::reconfigure()
     {
-
         m_internalSettings = SettingsProvider::self()->internalSettings( this );
 
         // animation
@@ -616,9 +610,8 @@ namespace Breeze
         readKonsoleProfileColor();
 
         // size grip
-        if( borderSize() <= 1 && m_internalSettings->drawSizeGrip() ) createSizeGrip();
+        if (borderSize() <= 1 && m_internalSettings->drawSizeGrip()) createSizeGrip();
         else deleteSizeGrip();
-
     }
 
     //________________________________________________________________
@@ -655,10 +648,10 @@ namespace Breeze
         const int extSize = s->largeSpacing();
         int extHSides = 0;
         int extVSides = 0;
-        if( borderSize() <= 1 )
+        if (borderSize() <= 1)
         {
-            if( !isMaximizedHorizontally() ) extHSides = extSize;
-            if( !isMaximizedVertically() ) extVSides = extSize;
+            if (!isMaximizedHorizontally()) extHSides = extSize;
+            if (!isMaximizedVertically()) extVSides = extSize;
         }
 
         setResizeOnlyBorders(QMargins(extHSides, extVSides, extHSides, extVSides));
@@ -745,9 +738,9 @@ namespace Breeze
         const auto s = settings();
 
         // adjust button position
-        const int bHeight = captionHeight() + (isTopEdge() ? s->smallSpacing()*Metrics::TitleBar_TopMargin:0);
+        const int bHeight = captionHeight() + (isTopEdge() ? s->smallSpacing()*Metrics::TitleBar_TopMargin : 0);
         const int bWidth = buttonHeight();
-        const int verticalOffset = (isTopEdge() ? s->smallSpacing()*Metrics::TitleBar_TopMargin:0) + (captionHeight()-buttonHeight())/2;
+        const int verticalOffset = (isTopEdge() ? s->smallSpacing()*Metrics::TitleBar_TopMargin : 0) + (captionHeight()-buttonHeight()) / 2;
         foreach( const QPointer<KDecoration2::DecorationButton>& button, m_leftButtons->buttons() + m_rightButtons->buttons() )
         {
             button.data()->setGeometry( QRectF( QPoint( 0, 0 ), QSizeF( bWidth, bHeight ) ) );
@@ -756,9 +749,7 @@ namespace Breeze
         }
 
         // left buttons
-        if( !m_leftButtons->buttons().isEmpty() )
-        {
-
+        if(!m_leftButtons->buttons().isEmpty()) {
             // spacing (use our own spacing instead of s->smallSpacing()*Metrics::TitleBar_ButtonSpacing)
             m_leftButtons->setSpacing(m_internalSettings->buttonSpacing());
 
@@ -781,8 +772,7 @@ namespace Breeze
         }
 
         // right buttons
-        if( !m_rightButtons->buttons().isEmpty() )
-        {
+        if(!m_rightButtons->buttons().isEmpty()) {
 
             // spacing (use our own spacing instead of s->smallSpacing()*Metrics::TitleBar_ButtonSpacing)
             m_rightButtons->setSpacing(m_internalSettings->buttonSpacing());
@@ -817,23 +807,24 @@ namespace Breeze
 
         QColor titleBarColor = this->titleBarColor();
 
+        painter->setRenderHint(QPainter::Antialiasing);
+
         // paint background
-        if( !c->isShaded() )
-        {
+        if (!c->isShaded()){
             painter->fillRect(rect(), Qt::transparent);
             painter->save();
             painter->setRenderHint(QPainter::Antialiasing);
-            painter->setBrush( titleBarColor );
+            painter->setBrush(titleBarColor);
 
             // clip away the top part
             // if( !hideTitleBar() ) painter->setClipRect(0, borderTop(), size().width(), size().height() - borderTop(), Qt::IntersectClip);
 
-            QPen border_pen1( titleBarColor.darker( 125 ) );
+            QPen border_pen1(titleBarColor.darker(125));
             painter->setPen(border_pen1);
-            if( s->isAlphaChannelSupported() )
+            if (s->isAlphaChannelSupported())
                 painter->drawRoundedRect(rect(), m_internalSettings->cornerRadius(), m_internalSettings->cornerRadius());
             else
-                painter->drawRect( rect() );
+                painter->drawRect(rect());
 
             painter->restore();
         }
@@ -842,15 +833,15 @@ namespace Breeze
 
         if (hasBorders()) {
             painter->save();
-            // painter->setRenderHint(QPainter::Antialiasing, false);
+//            painter->setRenderHint(QPainter::Antialiasing, false);
             painter->setBrush(Qt::NoBrush);
 
             QPen border_pen1(titleBarColor.darker( 125 ));
             painter->setPen(border_pen1);
             if (s->isAlphaChannelSupported())
-              painter->drawRoundedRect(rect(), m_internalSettings->cornerRadius(), m_internalSettings->cornerRadius());
+                painter->drawRoundedRect(rect(), m_internalSettings->cornerRadius(), m_internalSettings->cornerRadius());
             else
-              painter->drawRect(rect());
+                painter->drawRect(rect());
 
             painter->restore();
         }
@@ -861,91 +852,85 @@ namespace Breeze
     void Decoration::paintTitleBar(QPainter *painter, const QRect &repaintRegion)
     {
         const auto c = client().toStrongRef().data();
-        // TODO Review this. Here the window color is appended in matchedTitleBarColor var
-        const QColor matchedTitleBarColor(c->palette().color(QPalette::Window));
-        const QRect titleRect(QPoint(0, 0), QSize(size().width(), borderTop()));
 
-        if ( !titleRect.intersects(repaintRegion) ) return;
+        const QColor matchedTitleBarColor(c->palette().color(QPalette::Window));
+
+        const QRect titleRect(QPoint(0, 0), QSize(size().width(), borderTop()));
+        if (!titleRect.intersects(repaintRegion)) return;
+
+        QColor outlineColor = this->outlineColor();
 
         painter->save();
         painter->setPen(Qt::NoPen);
 
         // render a linear gradient on title area
-        if ( c->isActive() && m_internalSettings->drawBackgroundGradient() && !isKonsoleWindow(c) )
-        {
-            // TODO Review this. Initialize titleBarColor based on user's choise.
-            const QColor titleBarColor = (matchColorForTitleBar()  ? matchedTitleBarColor : this->titleBarColor() );
-            QLinearGradient gradient( 0, 0, 0, titleRect.height() );
-            gradient.setColorAt(0.0, titleBarColor.lighter( 120 ) );
-            gradient.setColorAt(0.8, titleBarColor);
-            painter->setBrush(gradient);
+        if (drawBackgroundGradient() && !isKonsoleWindow(c)) {
+            const QColor titleBarColor = (matchColorForTitleBar() ? matchedTitleBarColor : this->titleBarColor());
 
-        } else if ( !isKonsoleWindow(c) ) {
-            // TODO Review this. Initialize titleBarColor based on user's choise.
-            // I needed another else if because the window might not be active or has drawBackgroundGradient but
-            // I still need to take care the konsole case.
+            QLinearGradient gradient( 0, 0, 0, titleRect.height() );
+            int b = m_internalSettings->gradientOverride() > -1 ? m_internalSettings->gradientOverride() : m_internalSettings->backgroundGradientIntensity();
+            if (!c->isActive()) b *= 0.5;
+            b =  qBound(0, b, 100);
+            gradient.setColorAt(0.0, titleBarColor.lighter( 100 + b));
+            gradient.setColorAt(1.0, titleBarColor);
+            painter->setBrush(gradient);
+        } else if (!isKonsoleWindow(c)) {
             const QColor titleBarColor = (matchColorForTitleBar() ? matchedTitleBarColor : this->titleBarColor());
             painter->setBrush(titleBarColor);
-
         } else {
-            QColor titleBarColor = this->titleBarColor();
-            painter->setBrush( titleBarColor );
+            const QColor titleBarColor = this->titleBarColor();
+            painter->setBrush(titleBarColor);
         }
 
         auto s = settings();
-        if( isMaximized() || !s->isAlphaChannelSupported() )
-        {
-
+        if( !s->isAlphaChannelSupported() )
             painter->drawRect(titleRect);
-
-        } else if( c->isShaded() ) {
-
-            painter->drawRoundedRect(titleRect, Metrics::Frame_FrameRadius, Metrics::Frame_FrameRadius);
-
-        } else {
-
+        else if ( !hasBorders() ) {
             painter->setClipRect(titleRect, Qt::IntersectClip);
-
             // the rect is made a little bit larger to be able to clip away the rounded corners at the bottom and sides
-            painter->drawRoundedRect(titleRect.adjusted(
-                    isLeftEdge() ? -Metrics::Frame_FrameRadius:0,
-                    isTopEdge() ? -Metrics::Frame_FrameRadius:0,
-                    isRightEdge() ? Metrics::Frame_FrameRadius:0,
-                    Metrics::Frame_FrameRadius),
-                                     Metrics::Frame_FrameRadius, Metrics::Frame_FrameRadius);
+            const QRect rect = titleRect.adjusted(
+                    isLeftEdge() ? -m_internalSettings->cornerRadius():0,
+                    isTopEdge() ? -m_internalSettings->cornerRadius():0,
+                    isRightEdge() ? m_internalSettings->cornerRadius():0,
+                    m_internalSettings->cornerRadius());
 
+            painter->drawRoundedRect(rect, m_internalSettings->cornerRadius(), m_internalSettings->cornerRadius());
+        } else {
+            painter->drawRoundedRect(titleRect, m_internalSettings->cornerRadius(), m_internalSettings->cornerRadius());
         }
 
-        const QColor outlineColor( this->outlineColor() );
-        if( !c->isShaded() && outlineColor.isValid() )
+        if( !c->isShaded() && !hideTitleBar() && outlineColor.isValid() )
         {
             // outline
             painter->setRenderHint( QPainter::Antialiasing, false );
             painter->setBrush( Qt::NoBrush );
-            painter->setPen( outlineColor );
-            painter->drawLine( titleRect.bottomLeft(), titleRect.bottomRight() );
+            QPen pen(outlineColor);
+            pen.setWidth(1);
+            painter->setPen(pen);
+            painter->drawLine(titleRect.bottomLeft() + QPoint(borderSize(), 0), titleRect.bottomRight() - QPoint(borderSize(), 0) );
         }
 
         painter->restore();
 
-        // draw caption
-        painter->setFont(s->font());
-        painter->setPen( fontColor() );
+        if( !hideTitleBar() ) {
+            // draw caption
+            painter->setFont(s->font());
+            painter->setPen( fontColor() );
+            const auto cR = captionRect();
+            const QString caption = painter->fontMetrics().elidedText(c->caption(), Qt::ElideMiddle, cR.first.width());
+            painter->drawText(cR.first, cR.second | Qt::TextSingleLine, caption);
 
-        const auto cR = captionRect();
-        const QString caption = painter->fontMetrics().elidedText(c->caption(), Qt::ElideMiddle, cR.first.width());
-        painter->drawText(cR.first, cR.second | Qt::TextSingleLine, caption);
-
-        // draw all buttons
-        m_leftButtons->paint(painter, repaintRegion);
-        m_rightButtons->paint(painter, repaintRegion);
+            // draw all buttons
+            m_leftButtons->paint(painter, repaintRegion);
+            m_rightButtons->paint(painter, repaintRegion);
+        }
     }
 
     //________________________________________________________________
     int Decoration::buttonHeight() const
     {
         const int baseSize = settings()->gridUnit();
-        switch( m_internalSettings->buttonSize() )
+        switch (m_internalSettings->buttonSize())
         {
             case InternalSettings::ButtonTiny: return baseSize;
             case InternalSettings::ButtonSmall: return baseSize*1.5;
@@ -1003,16 +988,13 @@ namespace Breeze
                     boundingRect.setHeight( captionHeight() );
                     boundingRect.moveLeft( ( size().width() - boundingRect.width() )/2 );
 
-                    if( boundingRect.left() < leftOffset ) return qMakePair( maxRect, Qt::AlignVCenter|Qt::AlignLeft );
+                    if (boundingRect.left() < leftOffset) return qMakePair( maxRect, Qt::AlignVCenter | Qt::AlignLeft );
                     else if( boundingRect.right() > size().width() - rightOffset ) return qMakePair( maxRect, Qt::AlignVCenter|Qt::AlignRight );
                     else return qMakePair(fullRect, Qt::AlignCenter);
 
                 }
-
             }
-
         }
-
     }
 
     //________________________________________________________________

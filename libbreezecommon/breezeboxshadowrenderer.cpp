@@ -44,7 +44,7 @@ static inline qreal calculateBlurStdDev(int radius)
 static inline QSize calculateBlurExtent(int radius)
 {
     const int blurRadius = calculateBlurRadius(calculateBlurStdDev(radius));
-    return QSize(blurRadius, blurRadius);
+    return {blurRadius, blurRadius};
 }
 
 struct BoxLobes
