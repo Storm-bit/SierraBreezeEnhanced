@@ -1,9 +1,8 @@
-
-project(sierrabreezeenhanced)
+project(customsierrabreezeenhanced)
 set(PROJECT_VERSION "1.0.3")
 set(PROJECT_VERSION_MAJOR 0)
 
-cmake_minimum_required(VERSION 2.8.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.16.12 FATAL_ERROR)
 
 include(WriteBasicConfigVersionFile)
 include(FeatureSummary)
@@ -90,12 +89,12 @@ set(sierrabreezeenhanced_config_PART_FORMS
 ki18n_wrap_ui(sierrabreezeenhanced_config_PART_FORMS_HEADERS ${sierrabreezeenhanced_config_PART_FORMS})
 
 ### build library
-add_library(sierrabreezeenhanced MODULE
+add_library(customsierrabreezeenhanced MODULE
     ${sierrabreezeenhanced_SRCS}
     ${sierrabreezeenhanced_config_SRCS}
     ${sierrabreezeenhanced_config_PART_FORMS_HEADERS})
 
-target_link_libraries(sierrabreezeenhanced
+target_link_libraries(customsierrabreezeenhanced
     PUBLIC
         Qt5::Core
         Qt5::Gui
@@ -112,14 +111,14 @@ target_link_libraries(sierrabreezeenhanced
         KF5::WindowSystem)
 
 if(BREEZE_HAVE_X11)
-  target_link_libraries(sierrabreezeenhanced
+  target_link_libraries(customsierrabreezeenhanced
     PUBLIC
       Qt5::X11Extras
       XCB::XCB)
 endif()
 
 
-install(TARGETS sierrabreezeenhanced DESTINATION ${PLUGIN_INSTALL_DIR}/org.kde.kdecoration2)
+install(TARGETS customsierrabreezeenhanced DESTINATION ${PLUGIN_INSTALL_DIR}/org.kde.kdecoration2)
 install(FILES config/sierrabreezeenhancedconfig.desktop DESTINATION  ${SERVICES_INSTALL_DIR})
 # install(TARGETS breezedecoration DESTINATION ${PLUGIN_INSTALL_DIR}/org.kde.kdecoration2)
 # install(FILES config/breezedecorationconfig.desktop DESTINATION  ${SERVICES_INSTALL_DIR})

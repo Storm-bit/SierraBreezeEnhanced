@@ -67,7 +67,10 @@ K_PLUGIN_FACTORY_WITH_JSON(
 namespace {
     struct ShadowParams {
         ShadowParams()
-                : offset({0, 0}), radius(0), opacity(0) {}
+                :
+                offset({0, 0}),
+                radius(0),
+                opacity(0) {}
 
         ShadowParams(const QPoint &offset, int radius, qreal opacity)
                 : offset(offset), radius(radius), opacity(opacity) {}
@@ -620,7 +623,7 @@ namespace Breeze {
         // left, right and bottom borders
         const int left = isLeftEdge() ? 0 : borderSize();
         const int right = isRightEdge() ? 0 : borderSize();
-        const int bottom = (c->isShaded() || isBottomEdge()) ? 0 : borderSize(true);
+        const int bottom = borderSize(true);
 
         int top = 0;
         if (hideTitleBar()) top = bottom;
@@ -806,25 +809,22 @@ namespace Breeze {
 
         QColor titleBarColor = this->titleBarColor();
 
-        painter->setRenderHint(QPainter::Antialiasing);
-
         // paint background
         if (!c->isShaded()) {
             painter->fillRect(rect(), Qt::transparent);
             painter->save();
             painter->setRenderHint(QPainter::Antialiasing);
             painter->setBrush(titleBarColor);
-
             // clip away the top part
-            // if( !hideTitleBar() ) painter->setClipRect(0, borderTop(), size().width(), size().height() - borderTop(), Qt::IntersectClip);
+            // if( !hideTitleBar() ) painter->setClipRect(0, borderTop(), size().width(), size().height() - borderTop(), Qt::IntersectClip)
 
             QPen borderPen(titleBarColor.darker(125));
             painter->setPen(borderPen);
-            if (s->isAlphaChannelSupported())
-                painter->drawRoundedRect(rect(), m_internalSettings->cornerRadius(),
-                                         m_internalSettings->cornerRadius());
-            else
+            if (s->isAlphaChannelSupported() && !isMaximized()) {
+                painter->drawRoundedRect(rect(), m_internalSettings->cornerRadius(),m_internalSettings->cornerRadius());
+            } else {
                 painter->drawRect(rect());
+            }
 
             painter->restore();
         }
@@ -838,7 +838,7 @@ namespace Breeze {
 
             QPen borderPen(titleBarColor);
             painter->setPen(borderPen);
-            if (s->isAlphaChannelSupported())
+            if (s->isAlphaChannelSupported() && !isMaximized())
                 painter->drawRoundedRect(rect(), m_internalSettings->cornerRadius(),m_internalSettings->cornerRadius());
             else
                 painter->drawRect(rect());
@@ -883,9 +883,9 @@ namespace Breeze {
         }
 
         auto s = settings();
-        if (!s->isAlphaChannelSupported())
+        if (!s->isAlphaChannelSupported() || isMaximized()) {
             painter->drawRect(titleRect);
-        else if (!hasBorders()) {
+        } else {
             painter->setClipRect(titleRect, Qt::IntersectClip);
             // the rect is made a little bit larger to be able to clip away the rounded corners at the bottom and sides
             const QRect rect = titleRect.adjusted(
@@ -895,8 +895,6 @@ namespace Breeze {
                     m_internalSettings->cornerRadius());
 
             painter->drawRoundedRect(rect, m_internalSettings->cornerRadius(), m_internalSettings->cornerRadius());
-        } else {
-            painter->drawRoundedRect(titleRect, m_internalSettings->cornerRadius(), m_internalSettings->cornerRadius());
         }
 
         if (!c->isShaded() && !hideTitleBar() && outlineColor.isValid()) {
