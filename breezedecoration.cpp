@@ -178,7 +178,8 @@ namespace Breeze {
 
     //________________________________________________________________
     Decoration::Decoration(QObject *parent, const QVariantList &args)
-            : KDecoration2::Decoration(parent, args), m_animation(new QVariantAnimation(this)) {
+            : KDecoration2::Decoration(parent, args)
+            , m_animation(new QVariantAnimation(this)) {
         g_sDecoCount++;
     }
 
@@ -574,7 +575,7 @@ namespace Breeze {
                 case KDecoration2::BorderSize::None:
                     return 0;
                 case KDecoration2::BorderSize::NoSides:
-                    return bottom ? qMax(4, baseSize) : 0;
+                    return bottom ? baseSize * 6 : 0;
                 default:
                 case KDecoration2::BorderSize::Tiny:
                     return 1;
@@ -838,10 +839,11 @@ namespace Breeze {
 
             QPen borderPen(titleBarColor);
             painter->setPen(borderPen);
-            if (s->isAlphaChannelSupported() && !isMaximized())
+            if (s->isAlphaChannelSupported() && !isMaximized()) {
                 painter->drawRoundedRect(rect(), m_internalSettings->cornerRadius(),m_internalSettings->cornerRadius());
-            else
+            } else {
                 painter->drawRect(rect());
+            }
 
             painter->restore();
         }
