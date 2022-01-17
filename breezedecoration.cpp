@@ -545,6 +545,9 @@ namespace Breeze {
 
     //________________________________________________________________
     int Decoration::borderSize(bool bottom) const {
+        if (bottom && isMaximized())
+            return 0;
+
         const int baseSize = settings()->smallSpacing();
         if (m_internalSettings && (m_internalSettings->mask() & BorderSize)) {
             switch (m_internalSettings->borderSize()) {
@@ -569,29 +572,26 @@ namespace Breeze {
                     return baseSize * 6;
             }
 
-        } else {
-
-            switch (settings()->borderSize()) {
-                case KDecoration2::BorderSize::None:
-                    return 0;
-                case KDecoration2::BorderSize::NoSides:
-                    return bottom ? baseSize * 6 : 0;
-                default:
-                case KDecoration2::BorderSize::Tiny:
-                    return 1;
-                case KDecoration2::BorderSize::Normal:
-                    return bottom ? qMax(4, baseSize) : baseSize;
-                case KDecoration2::BorderSize::Large:
-                    return baseSize * 2;
-                case KDecoration2::BorderSize::VeryLarge:
-                    return baseSize * 3;
-                case KDecoration2::BorderSize::Huge:
-                    return baseSize * 4;
-                case KDecoration2::BorderSize::VeryHuge:
-                    return baseSize * 5;
-                case KDecoration2::BorderSize::Oversized:
-                    return baseSize * 6;
-            }
+        } else switch (settings()->borderSize()) {
+            case KDecoration2::BorderSize::None:
+                return 0;
+            case KDecoration2::BorderSize::NoSides:
+                return bottom ? baseSize * 6 : 0;
+            default:
+            case KDecoration2::BorderSize::Tiny:
+                return 1;
+            case KDecoration2::BorderSize::Normal:
+                return bottom ? qMax(4, baseSize) : baseSize;
+            case KDecoration2::BorderSize::Large:
+                return baseSize * 2;
+            case KDecoration2::BorderSize::VeryLarge:
+                return baseSize * 3;
+            case KDecoration2::BorderSize::Huge:
+                return baseSize * 4;
+            case KDecoration2::BorderSize::VeryHuge:
+                return baseSize * 5;
+            case KDecoration2::BorderSize::Oversized:
+                return baseSize * 6;
         }
     }
 
@@ -618,7 +618,6 @@ namespace Breeze {
 
     //________________________________________________________________
     void Decoration::recalculateBorders() {
-        auto c = client().toStrongRef().data();
         auto s = settings();
 
         // left, right and bottom borders
